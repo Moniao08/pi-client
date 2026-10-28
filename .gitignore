@@ -1,0 +1,17 @@
+# 构建产物（release/ 里的 exe 是提交进仓库的，dist/ 不提交）
+dist/
+stage/
+
+# 运行时生成的配置与日志（可能含本机路径，不要提交）
+config.json
+crash.log
+trace.log
+smoke.png
+smoke-result.txt
+
+# 编辑器 / IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.swp
