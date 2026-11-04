@@ -68,8 +68,6 @@ namespace PiClient
 
                 EnableDpiAwareness();
                 Application.EnableVisualStyles();
-                Theme.Init(Dpi.DetectScale());
-                Trace("dpi: " + Dpi.LastDebug + " => scale=" + Theme.Scale);
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 // 写崩溃日志，方便排查（窗口程序没有控制台）

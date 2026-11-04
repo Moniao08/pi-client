@@ -72,6 +72,7 @@ namespace PiClient
         private string _smokePrompt;
         private int _smokeTick;
         private bool _smokeDone;
+        private bool _built;
         public bool ForceSetup;
         public string OpenSessionPath;
         private bool _shotOnly;
@@ -93,9 +94,9 @@ namespace PiClient
                 if (ico != null) Icon = ico;
             }
             catch { }
-            _scale = Theme.Scale > 0 ? Theme.Scale : 1f;
-            BuildUi();
+
         }
+
 
         private static float ScreenDpi()
         {
@@ -121,6 +122,19 @@ namespace PiClient
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+
+            if (!_built)
+            {
+                float fontScale;
+                float s = Dpi.DetectScale(Handle, out fontScale);
+                Theme.Init(fontScale);
+                _scale = s;
+                MinimumSize = new Size(S(1000), S(640));
+                Program.Trace("dpi: " + Dpi.LastDebug + " => layout=" + s + " font=" + fontScale);
+                BuildUi();
+                _built = true;
+            }
+
             try
             {
                 int on = 1;
@@ -229,6 +243,8 @@ namespace PiClient
             _input.Font = Theme.Body;
             _input.ScrollBars = ScrollBars.None;
             _input.KeyDown += OnInputKeyDown;
+            _input.Enter += delegate { UpdatePlaceholder(); };
+            _input.Leave += delegate { UpdatePlaceholder(); };
             _input.TextChanged += delegate { UpdateComposerHeight(); SlashPalette(); UpdatePlaceholder(); };
             _inputWrap.Controls.Add(_input);
             _placeholder = MakeLabel("给 pi 发消息…  Enter 发送 / Shift+Enter 换行 / Ctrl+V 贴图", Theme.Body, Color.FromArgb(93, 104, 128));
@@ -413,11 +429,14 @@ namespace PiClient
             int cw = _composer.Width - padX * 2;
             int inputH = InputHeight();
             int boxH = inputH + S(8);
+            bool stopVisible = _btnStop.Visible;
+            int btnZone = S(10) + S(74) + (stopVisible ? S(70) : 0) + S(6);
+            int textW = Math.Max(S(50), cw - S(12) - btnZone);
             _inputWrap.Bounds = new Rectangle(padX, padY, cw, boxH);
             _btnSend.Bounds = new Rectangle(cw - S(10) - S(74), boxH - S(8) - S(30), S(74), S(30));
-            _btnStop.Bounds = new Rectangle(_btnSend.Left - S(70), boxH - S(8) - S(30), S(62), S(30));
-            _input.Bounds = new Rectangle(S(12), S(9), Math.Max(S(60), cw - S(12) - S(94)), Math.Max(S(22), boxH - S(18)));
-            _placeholder.Bounds = new Rectangle(S(14), S(11), Math.Max(S(60), cw - S(20) - S(94)), S(20));
+            _btnStop.Bounds = new Rectangle(Math.Max(S(4), _btnSend.Left - S(70)), boxH - S(8) - S(30), S(62), S(30));
+            _input.Bounds = new Rectangle(S(12), S(9), textW, Math.Max(S(22), boxH - S(18)));
+            _placeholder.Bounds = new Rectangle(S(14), S(11), Math.Max(S(40), textW - S(2)), S(20));
             _attachLabel.Bounds = new Rectangle(padX + S(2), padY + boxH + S(3), S(260), S(20));
             _btnAttachClear.Bounds = new Rectangle(padX + S(190), padY + boxH + S(2), S(74), S(22));
 
@@ -840,7 +859,12 @@ namespace PiClient
             _modelCombo.Enabled = s != null && !s.Dead;
             _thinkCombo.Enabled = s != null && !s.Dead;
             _btnSend.Enabled = s != null && !s.Dead;
-            _btnStop.Visible = s != null && s.Streaming;
+            bool wantStop = s != null && s.Streaming;
+            if (_btnStop.Visible != wantStop)
+            {
+                _btnStop.Visible = wantStop;
+                DoLayout();
+            }
             _btnCompact.Enabled = s != null && !s.Dead && !s.Streaming;
 
             if (s != null)
@@ -1168,8 +1192,9 @@ namespace PiClient
         private void UpdatePlaceholder()
         {
             if (_placeholder == null) return;
-            _placeholder.Visible = _input.Text.Length == 0;
-            if (_placeholder.Visible) _placeholder.BringToFront();
+            bool show = _input.Text.Length == 0 && !_input.Focused;
+            _placeholder.Visible = show;
+            if (show) _placeholder.BringToFront();
         }
 
         private void UpdateAttachLabel()

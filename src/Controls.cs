@@ -348,6 +348,7 @@ namespace PiClient
             public int Bar;
             public bool IsCode;
             public bool IsCodeHeader;
+            public bool NoBreak;   // 折行产生的续行（复制时不加换行）
         }
 
         private string _raw = "";
@@ -372,17 +373,42 @@ namespace PiClient
         private readonly List<Rectangle> _tableHeaders = new List<Rectangle>();
         private readonly List<Rectangle> _tableRows = new List<Rectangle>();
 
+        // 文字选取
+        private bool _selecting;
+        private bool _hasSel;
+        private int _anchLine = -1;
+        private int _anchChar;
+        private int _caretLine = -1;
+        private int _caretChar;
+        private ContextMenuStrip _menu;
+
         public event EventHandler HeightChanged;
         public event Action<string> LinkActivated;
         public event Action<string> CodeCopied;
 
         public MdView()
         {
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
             BackColor = Theme.Bg;
             Font = Theme.Body;
             TabStop = false;
+
+            _menu = new ContextMenuStrip();
+            _menu.Renderer = new DarkMenuRenderer();
+            _menu.BackColor = Theme.Panel2;
+            _menu.Font = Theme.Ui;
+            _menu.ShowImageMargin = false;
+            _menu.Items.Add("复制", null, delegate { CopySelection(); });
+            _menu.Items.Add("全选", null, delegate { SelectAll(); });
+            _menu.Opening += delegate(object s, System.ComponentModel.CancelEventArgs e)
+            {
+                if (string.IsNullOrEmpty(_raw)) e.Cancel = true;
+                else _menu.Items[0].Enabled = _hasSel;
+            };
+            ContextMenuStrip = _menu;
         }
+
+        public bool HasSelection { get { return _hasSel; } }
 
         public bool Plain { get { return _plain; } set { _plain = value; Relayout(); } }
         public bool Dense { get { return _dense; } set { _dense = value; Relayout(); } }
@@ -395,6 +421,7 @@ namespace PiClient
             if (text == _raw) return;
             _raw = text;
             _blocks = null;
+            ClearSelection();
             Relayout();
         }
 
@@ -648,6 +675,7 @@ namespace PiClient
                         flush();
                         y += cur.H;
                         cur = NewLine(y);
+                        cur.NoBreak = true;
                         x = x0;
                         if (chunk.Trim().Length == 0) continue;
                     }
@@ -756,6 +784,7 @@ namespace PiClient
                 Rectangle rr = _tableRows[ti];
                 using (Pen p = new Pen(Color.FromArgb(30, 39, 55))) g.DrawLine(p, rr.Left, rr.Bottom - 1, rr.Right, rr.Bottom - 1);
             }
+            PaintSelection(g);
 
             for (int i = 0; i < _lines.Count; i++)
             {
@@ -821,34 +850,301 @@ namespace PiClient
             return null;
         }
 
+        /* ------------- 选取与复制 ------------- */
+
+        private static int LineLen(Line ln)
+        {
+            int n = 0;
+            for (int i = 0; i < ln.Segs.Count; i++)
+            {
+                if (ln.Segs[i].Text == "\n") continue;
+                n += ln.Segs[i].Text.Length;
+            }
+            return n;
+        }
+
+        private static string LineText(Line ln)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < ln.Segs.Count; i++)
+            {
+                if (ln.Segs[i].Text == "\n") continue;
+                sb.Append(ln.Segs[i].Text);
+            }
+            return sb.ToString();
+        }
+
+        private int XOfChar(Line ln, int idx)
+        {
+            int acc = 0;
+            int lastX = 0;
+            for (int i = 0; i < ln.Segs.Count; i++)
+            {
+                Seg s = ln.Segs[i];
+                if (s.Text == "\n") continue;
+                int len = s.Text.Length;
+                if (idx <= acc + len)
+                {
+                    int k = idx - acc;
+                    if (k < 0) k = 0;
+                    if (k > len) k = len;
+                    return s.X + (k == 0 ? 0 : TextMeter.Width(s.Text.Substring(0, k), s.Font));
+                }
+                acc += len;
+                lastX = s.X + s.W;
+            }
+            return lastX;
+        }
+
+        private static int CharAtX(Seg s, int x)
+        {
+            int lo = 0;
+            int hi = s.Text.Length;
+            while (lo < hi)
+            {
+                int mid = (lo + hi) / 2;
+                int w = TextMeter.Width(s.Text.Substring(0, mid + 1), s.Font);
+                if (s.X + w <= x) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        }
+
+        private void PointToPos(Point p, out int lineIdx, out int ch)
+        {
+            lineIdx = 0;
+            ch = 0;
+            if (_lines.Count == 0) return;
+            if (p.Y < _lines[0].Y) return;
+            Line ln = _lines[_lines.Count - 1];
+            int idx = _lines.Count - 1;
+            for (int i = 0; i < _lines.Count; i++)
+            {
+                Line l = _lines[i];
+                if (p.Y >= l.Y && p.Y <= l.Y + l.H)
+                {
+                    ln = l;
+                    idx = i;
+                    break;
+                }
+            }
+            lineIdx = idx;
+            int acc = 0;
+            int last = 0;
+            for (int i = 0; i < ln.Segs.Count; i++)
+            {
+                Seg s = ln.Segs[i];
+                if (s.Text == "\n") continue;
+                last = acc + s.Text.Length;
+                if (p.X <= s.X)
+                {
+                    ch = acc;
+                    return;
+                }
+                if (p.X <= s.X + s.W)
+                {
+                    ch = acc + CharAtX(s, p.X);
+                    return;
+                }
+                acc += s.Text.Length;
+            }
+            ch = last;
+        }
+
+        private void GetSelRange(out int l1, out int c1, out int l2, out int c2)
+        {
+            l1 = _anchLine;
+            c1 = _anchChar;
+            l2 = _caretLine;
+            c2 = _caretChar;
+            if (l1 < 0 || l2 < 0) return;
+            if (l2 < l1 || (l2 == l1 && c2 < c1))
+            {
+                int tl = l1, tc = c1;
+                l1 = l2; c1 = c2;
+                l2 = tl; c2 = tc;
+            }
+            if (l1 >= _lines.Count) { l1 = _lines.Count - 1; c1 = LineLen(_lines[l1]); }
+            if (l2 >= _lines.Count) { l2 = _lines.Count - 1; c2 = LineLen(_lines[l2]); }
+        }
+
+        public string GetSelectedText()
+        {
+            if (!_hasSel || _lines.Count == 0) return "";
+            int l1, c1, l2, c2;
+            GetSelRange(out l1, out c1, out l2, out c2);
+            if (l1 < 0) return "";
+            StringBuilder sb = new StringBuilder();
+            for (int i = l1; i <= l2; i++)
+            {
+                Line ln = _lines[i];
+                string text = LineText(ln);
+                int from = i == l1 ? c1 : 0;
+                int to = i == l2 ? c2 : text.Length;
+                if (from < 0) from = 0;
+                if (to > text.Length) to = text.Length;
+                if (to > from) sb.Append(text.Substring(from, to - from));
+                if (i < l2 && !_lines[i + 1].NoBreak) sb.Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        public bool CopySelection()
+        {
+            string text = GetSelectedText();
+            Program.Trace("copy len=" + (text == null ? -1 : text.Length));
+            if (string.IsNullOrEmpty(text)) return false;
+            try
+            {
+                Clipboard.SetText(text);
+                Action<string> h = CodeCopied;
+                if (h != null) h(text);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        public void SelectAll()
+        {
+            if (_lines.Count == 0) return;
+            _anchLine = 0;
+            _anchChar = 0;
+            _caretLine = _lines.Count - 1;
+            _caretChar = LineLen(_lines[_caretLine]);
+            _hasSel = true;
+            Invalidate();
+        }
+
+        public void ClearSelection()
+        {
+            bool had = _hasSel;
+            _hasSel = false;
+            _anchLine = -1;
+            _caretLine = -1;
+            _selecting = false;
+            if (had) Invalidate();
+        }
+
+        private void PaintSelection(Graphics g)
+        {
+            if (!_hasSel || _lines.Count == 0) return;
+            int l1, c1, l2, c2;
+            GetSelRange(out l1, out c1, out l2, out c2);
+            if (l1 < 0) return;
+            using (SolidBrush b = new SolidBrush(Color.FromArgb(72, 110, 180, 255)))
+            {
+                for (int i = l1; i <= l2; i++)
+                {
+                    Line ln = _lines[i];
+                    int len = LineLen(ln);
+                    int from = i == l1 ? c1 : 0;
+                    int to = i == l2 ? c2 : len;
+                    if (from < 0) from = 0;
+                    if (to > len) to = len;
+                    int x1 = XOfChar(ln, from);
+                    int x2 = XOfChar(ln, to);
+                    if (x2 < x1) { int t = x1; x1 = x2; x2 = t; }
+                    if (x2 - x1 < 3) x2 = x1 + 3;
+                    g.FillRectangle(b, x1, ln.Y, x2 - x1, ln.H);
+                }
+            }
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.C) || keyData == (Keys.Control | Keys.A)) return true;
+            return base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.C)
+            {
+                CopySelection();
+                e.Handled = true;
+                return;
+            }
+            if (e.Control && e.KeyCode == Keys.A)
+            {
+                SelectAll();
+                e.Handled = true;
+                return;
+            }
+            if (e.KeyCode == Keys.Escape)
+            {
+                ClearSelection();
+                e.Handled = true;
+                return;
+            }
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                CodeRect cr = HitCode(e.Location);
+                if (cr != null && e.Y - cr.Top < 20 && !string.IsNullOrEmpty(cr.Text))
+                {
+                    // 点代码块标题条 = 复制整块
+                    try { Clipboard.SetText(cr.Text); } catch { }
+                    Action<string> h = CodeCopied;
+                    if (h != null) h(cr.Text);
+                    return;
+                }
+                Focus();
+                PointToPos(e.Location, out _anchLine, out _anchChar);
+                Program.Trace("md down at " + e.X + "," + e.Y + " line=" + _anchLine + " ch=" + _anchChar);
+                _caretLine = _anchLine;
+                _caretChar = _anchChar;
+                _selecting = true;
+                _hasSel = false;
+                Invalidate();
+                return; // 不调 base，避免被父容器抢焦点
+            }
+            base.OnMouseDown(e);
+        }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (_selecting)
+            {
+                int l, c;
+                PointToPos(e.Location, out l, out c);
+                if (l != _caretLine || c != _caretChar)
+                {
+                    _caretLine = l;
+                    _caretChar = c;
+                    _hasSel = !(l == _anchLine && c == _anchChar);
+                    Invalidate();
+                }
+                Cursor = Cursors.IBeam;
+                return;
+            }
+
             Seg s = HitTest(e.Location);
-            if (!ReferenceEquals(s, _hot))
+            CodeRect code = HitCode(e.Location);
+            bool head = code != null && e.Y - code.Top < 20;
+            Cursor cur = s != null || head ? Cursors.Hand : (_lines.Count > 0 ? Cursors.IBeam : Cursors.Default);
+            if (!object.ReferenceEquals(s, _hot) || Cursor != cur)
             {
                 _hot = s;
-                Cursor = s != null ? Cursors.Hand : (HitCode(e.Location) != null ? Cursors.Hand : Cursors.Default);
+                Cursor = cur;
             }
             base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            _selecting = false;
+            Program.Trace("md up hasSel=" + _hasSel + " lines=" + _lines.Count);
+            base.OnMouseUp(e);
         }
 
         protected override void OnMouseClick(MouseEventArgs e)
         {
             Seg s = HitTest(e.Location);
-            if (s != null && LinkActivated != null)
-            {
-                LinkActivated(s.Href);
-            }
-            else
-            {
-                CodeRect cr = HitCode(e.Location);
-                if (cr != null && !string.IsNullOrEmpty(cr.Text))
-                {
-                    try { Clipboard.SetText(cr.Text); } catch { }
-                    Action<string> h = CodeCopied;
-                    if (h != null) h(cr.Text);
-                }
-            }
+            if (s != null && LinkActivated != null && !_hasSel) LinkActivated(s.Href);
             base.OnMouseClick(e);
         }
     }

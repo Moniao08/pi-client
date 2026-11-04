@@ -83,7 +83,54 @@ namespace PiClient
 
         public static string LastDebug = "";
 
-        public static float DetectScale()
+        /// <summary>
+        /// 返回两个缩放：
+        ///   layoutScale —— 布局常量要乘的倍数（= 系统缩放 / 96）
+        ///   fontScale   —— 字号还要额外放大的倍数（仅当实际渲染 DPI 仍是 96 时才需要）
+        /// 这样无论系统怎么报 DPI，最终界面比例都和用户设置一致。
+        /// </summary>
+        public static float DetectScale(IntPtr hwnd, out float fontScale)
+        {
+            fontScale = 1f;
+            try
+            {
+                int renderDpi = 96;
+                try
+                {
+                    using (System.Drawing.Graphics g = hwnd != IntPtr.Zero ? System.Drawing.Graphics.FromHwnd(hwnd) : System.Drawing.Graphics.FromHwnd(IntPtr.Zero))
+                    {
+                        int v = (int)Math.Round(g.DpiX);
+                        if (v >= 72) renderDpi = v;
+                    }
+                }
+                catch { }
+
+                int physW = PhysicalWidth();
+                int viewW = Screen.PrimaryScreen.Bounds.Width;
+                if (physW > 0 && viewW > 0 && physW / (float)viewW > 1.02f)
+                {
+                    // 系统已经在位图缩放这个进程，布局和字号都别再放大
+                    LastDebug = "virtualized phys=" + physW + " view=" + viewW;
+                    return 1f;
+                }
+
+                int applied = RegistryDpi();
+                if (applied < 72) applied = 96;
+                float layout = applied / 96f;
+                if (layout < 1f) layout = 1f;
+                if (layout > 2f) layout = 2f;
+
+                float font = applied / (float)Math.Max(96, renderDpi);
+                if (font < 1f) font = 1f;
+                if (font > 2f) font = 2f;
+                fontScale = font;
+                LastDebug = "applied=" + applied + " render=" + renderDpi + " phys=" + physW + " view=" + viewW;
+                return layout;
+            }
+            catch { return 1f; }
+        }
+
+        public static float DetectScaleLegacy()
         {
             try
             {
