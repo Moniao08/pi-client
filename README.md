@@ -21,6 +21,11 @@
 └──────────────┴──────────────────────────────────────────┘
 ```
 
+## 仓库
+
+- Gitee（主）：https://gitee.com/zhang-yj08/pi-client
+- GitHub（镜像）：https://github.com/Moniao08/pi-client
+
 ## 直接使用（不需要编译）
 
 1. 下载 [`release/pi-client.exe`](release/pi-client.exe)（也可以下载 [`release/pi-client-1.0.zip`](release/pi-client-1.0.zip) 解压）

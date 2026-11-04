@@ -3,11 +3,38 @@
 > 这份文档是项目的「交接说明」。**新开一个 pi 会话、或者 `pi -r` 续接旧会话后，先读这一份**，
 > 就能立刻知道项目在哪、怎么编译、发布流程是什么、还有哪些坑没填。
 
-- 仓库：https://gitee.com/zhang-yj08/pi-client （main 分支）
+- 仓库（双远程，一条命令推两边）：
+  - Gitee：https://gitee.com/zhang-yj08/pi-client
+  - GitHub：https://github.com/Moniao08/pi-client
+  - main 分支；两个仓库内容保持一致
 - 当前版本：**v1.1**（2026-11-04）
 - 本机源码目录：`C:\Users\Administrator\pi-client`
 - 本机安装目录：`%LOCALAPPDATA%\Programs\pi-client`（桌面快捷方式「pi 客户端」指向这里）
 - 运行产物：`release/pi-client.exe`（140 KB）、`release/pi-client-1.1.zip`
+
+---
+
+## 0. 远程仓库与网络
+
+`origin` 的 fetch 指向 Gitee，**push 同时推 Gitee + GitHub**（同一个 origin 上挂了两个推送地址）：
+
+```bat
+git remote -v
+:: origin  https://gitee.com/zhang-yj08/pi-client.git (fetch)
+:: origin  https://gitee.com/zhang-yj08/pi-client.git (push)
+:: origin  https://github.com/Moniao08/pi-client.git (push)
+git push          :: gitee 和 github 一起推
+```
+
+- **GitHub 必须走代理**：本仓库已配 `http.https://github.com.proxy = http://127.0.0.1:7897`
+  （Clash Verge 的混合端口）。代理没开时 GitHub 会推失败，而 Gitee 通常已推完，
+  此时 `git push` 返回非 0 属正常现象；补推只需 `git push github main`。
+  端口变了就改：`git config --local "http.https://github.com.proxy" "http://127.0.0.1:新端口"`。
+- **凭据**：`git:https://github.com` 和 `git:https://gitee.com` 都已存在 Windows 凭据管理器，
+  本仓库 `credential.helper=wincred`，正常不用输密码。换机器才需要重新登录
+  （`git credential-manager github login`，或直接在推送时按提示输入用户名 + PAT）。
+- 只推一侧：GitHub → `git push github main`；Gitee → 直接把 Gitee 地址当远程用
+  `git push https://gitee.com/zhang-yj08/pi-client.git main`。
 
 ---
 
