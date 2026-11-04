@@ -1,5 +1,7 @@
 # pi 客户端（Windows 原生）
 
+> 长期维护说明见 [PROJECT.md](PROJECT.md)（架构、发布流程、待办），变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+>
 > v1.1：新增文字选取/复制（拖选 + Ctrl+C / Ctrl+A / 右键菜单），修复占位提示挡光标、窄窗口下「停止」按钮被输入框遮挡。
 
 给 [pi](https://pi.dev) 编码助手做的 Windows 图形界面：**双击 exe 就能用，不用开终端敲 `pi`**。
