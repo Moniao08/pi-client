@@ -171,7 +171,20 @@ git push
    Gitee 凭据存在 Windows 凭据管理器里（`git:https://gitee.com`），无需每次输密码。
    若换机器：`git config credential.helper manager` 或 `wincred`。
 
-7. 可选：在 Gitee 网页「发行版」里上传 zip，给使用者一个稳定下载页。
+7. 可选：发一个 Release（给使用者稳定下载页）。仓库里有两个脚本：
+
+```bat
+:: GitHub（用 GCM 存在凭据管理器里的 OAuth token，读 GH_TOKEN）
+set GH_TOKEN=...
+python tools\make-release-github.py
+
+:: Gitee（需要私人令牌：Gitee → 设置 → 私人令牌 → 勾选 projects）
+set GITEE_TOKEN=...
+python tools\make-release-gitee.py
+```
+
+   两个脚本都会先删掉同 tag 的旧发行版再重建，并上传 `pi-client-<版本>.zip` 与 `pi-client.exe`。
+   发之前先 `git tag v<版本> && git push origin v<版本>`（origin 会同时推到 Gitee 和 GitHub）。
 
 ---
 
