@@ -7,7 +7,7 @@
   - Gitee：https://gitee.com/zhang-yj08/pi-client
   - GitHub：https://github.com/Moniao08/pi-client
   - main 分支；两个仓库内容保持一致
-- 当前版本：**v1.2**（2026-11-11）
+- 当前版本：**v1.2**（2026-11-11，青绿主题 + 自绘标题栏/滚动条）
 - 本机源码目录：`C:\Users\Administrator\pi-client`
 - 本机安装目录：`%LOCALAPPDATA%\Programs\pi-client`（桌面快捷方式「pi 客户端」指向这里）
 - 运行产物：`release/pi-client.exe`（147 KB）、`release/pi-client-1.2.zip`
@@ -220,7 +220,7 @@ pi --session "C:\Users\Administrator\.pi\agent\sessions\--E--homework--\2026-10-
 
 **接上后第一句话建议：**
 
-> 读一下 C:\Users\Administrator\pi-client\PROJECT.md 和 CHANGELOG.md，然后我们继续做 v1.2。
+> 读一下 C:\Users\Administrator\pi-client\PROJECT.md 和 CHANGELOG.md，然后我们继续做 v1.3。
 
 **长期备份**
 
