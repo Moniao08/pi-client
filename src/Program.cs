@@ -67,6 +67,7 @@ namespace PiClient
                 }
 
                 EnableDpiAwareness();
+                Native.EnableDarkMode();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 

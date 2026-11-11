@@ -7,10 +7,10 @@
   - Gitee：https://gitee.com/zhang-yj08/pi-client
   - GitHub：https://github.com/Moniao08/pi-client
   - main 分支；两个仓库内容保持一致
-- 当前版本：**v1.1**（2026-11-04）
+- 当前版本：**v1.2**（2026-11-11）
 - 本机源码目录：`C:\Users\Administrator\pi-client`
 - 本机安装目录：`%LOCALAPPDATA%\Programs\pi-client`（桌面快捷方式「pi 客户端」指向这里）
-- 运行产物：`release/pi-client.exe`（140 KB）、`release/pi-client-1.1.zip`
+- 运行产物：`release/pi-client.exe`（147 KB）、`release/pi-client-1.2.zip`
 
 ---
 
@@ -59,7 +59,12 @@ git push          :: gitee 和 github 一起推
 | --- | --- | --- |
 | `src/Program.cs` | 入口：单实例互斥、DPI 感知、崩溃/跟踪日志、`--smoke` 自检 | 低 |
 | `src/MainForm.cs` | 主窗口：手动布局（`DoLayout`）、侧栏/顶栏/输入区、会话管理、60 ms 刷新循环 `Pump` | **高** |
-| `src/Views.cs` | `MessageView`（用户气泡/助手内容块堆叠）、`ChatFlow`（滚动容器） | 中 |
+| `src/Views.cs` | `MessageView`（用户气泡/助手内容块堆叠） | 中 |
+| `src/ChatFlow.cs` | 对话滚动容器：自绘细滚动条、贴底跟随、滚轮/拖动/翻页 | 中 |
+| `src/DarkList.cs` | 侧栏自绘列表（细滚动条、悬停/选中态） | 低 |
+| `src/CaptionButton.cs` | 自绘最小化/最大化/关闭按钮 | 低 |
+| `src/DragSurface.cs` | 命中测试透明的顶栏/标题控件（让无边框窗口能拖动） | 低 |
+| `src/Native.cs` | Win32 封装：命中常量、工作区限位、阴影、暗色滚动条、ForceDark | 低 |
 | `src/Controls.cs` | 自绘控件：`FlatButton`、`DarkSelect`、`DarkList`、**`MdView`（Markdown+选取复制）**、`ToolCardView`、`ThinkingView` | **高** |
 | `src/Session.cs` | 一个会话 = 一个 pi 子进程 + 消息模型；事件→模型→UI 增量的数据中心 | **高** |
 | `src/PiRpc.cs` | JSONL 协议：进程管道、请求/响应配对、超时、杀进程树 | 低 |
@@ -94,6 +99,12 @@ pi 子进程 stdout(JSONL) → PiRpc.Request/Evt
   `layoutScale = AppliedDPI/96`（放大布局），`fontScale = AppliedDPI/renderDpi`（渲染已是 120 则不再放大字号）。
 - **打包后 asar 只读**：本项目已不用 Electron，但 `Config` 依然写成「exe 同目录」，注意目录可写性。
 - **pi 子进程要整棵树杀**：`PiRpc.Dispose()` 用 `taskkill /T /F`。
+- **无边框窗口的拖动/缩放**：顶栏（含标题 Label）必须对命中测试返回 `HTTRANSPARENT`，
+  否则鼠标落在子控件上，命中测试根本到不了主窗口，拖动无效；缩放则依赖保留
+  `WS_THICKFRAME`（系统在客户区外的边框上做命中测试，子控件盖不到），
+  并用 `WM_GETMINMAXINFO` 把最大化限制在工作区。
+- **系统控件滚动条**：`SetPreferredAppMode(ForceDark)` + `SetWindowTheme(hwnd,"DarkMode_Explorer",null)`
+  可让 ListBox/TextBox 的滚动条变深；对话区和侧栏列表则完全自绘。
 
 ---
 

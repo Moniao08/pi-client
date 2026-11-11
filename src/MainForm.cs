@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 
 namespace PiClient
 {
-    internal class MainForm : Form
+    internal class MainForm : Form, IMessageFilter
     {
         private List<string> _modelLabels = new List<string>();
         private List<string> _thinkLabels = new List<string>();
@@ -59,6 +59,9 @@ namespace PiClient
         private FlatButton _btnSetup;
         private FlatButton _btnAttachClear;
         private FlatButton _btnFoot;
+        private CaptionButton _capMin;
+        private CaptionButton _capMax;
+        private CaptionButton _capClose;
 
         private readonly Timer _uiTimer = new Timer();
         private readonly Timer _toastTimer = new Timer();
@@ -80,6 +83,7 @@ namespace PiClient
         public MainForm()
         {
             AutoScaleMode = AutoScaleMode.None;
+            FormBorderStyle = FormBorderStyle.None;
             BackColor = Theme.Bg;
             ForeColor = Theme.TextCol;
             Text = "pi 客户端";
@@ -116,8 +120,17 @@ namespace PiClient
             return (int)Math.Round(px * _scale);
         }
 
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                // 无边框但仍保留系统的可缩放边框（四周 4px），这样拖边缩放不用自己算
+                cp.Style |= 0x00040000; // WS_THICKFRAME
+                if (WindowState == FormWindowState.Maximized) cp.Style &= ~0x00040000;
+                return cp;
+            }
+        }
 
         protected override void OnHandleCreated(EventArgs e)
         {
@@ -135,14 +148,7 @@ namespace PiClient
                 _built = true;
             }
 
-            try
-            {
-                int on = 1;
-                int build = Environment.OSVersion.Version.Build;
-                int attr = build >= 18985 ? 20 : 19;
-                DwmSetWindowAttribute(Handle, attr, ref on, 4);
-            }
-            catch { }
+            Native.AddDropShadow(Handle);
 
         }
 
@@ -152,7 +158,7 @@ namespace PiClient
             _chat = new ChatFlow();
             _chat.Scrolled += delegate { _dirty = true; };
 
-            _topBar = new DarkPanel();
+            _topBar = new DragPanel();
             _topBar.Paint += PaintTopBar;
 
             _sideBar = new DarkPanel();
@@ -183,13 +189,20 @@ namespace PiClient
             _btnSetup = MakeIconButton("⚙", "绑定 / 更换 pi");
             _btnSetup.Click += delegate { SetupPi(false); };
 
+            _capMin = new CaptionButton(CaptionKind.Minimize);
+            _capMin.Click += delegate { WindowState = FormWindowState.Minimized; };
+            _capMax = new CaptionButton(CaptionKind.Maximize);
+            _capMax.Click += delegate { ToggleMaximize(); };
+            _capClose = new CaptionButton(CaptionKind.Close);
+            _capClose.Click += delegate { Close(); };
+
             // 侧栏
             _btnNew = new FlatButton("＋  新对话");
             _btnNew.Primary = true;
             _btnNew.Click += delegate { NewSession(); };
 
             _dirCaption = MakeLabel("当前工作目录", Theme.UiSmall, Theme.Muted2);
-            _dirLabel = MakeLabel("—", Theme.UiSmall, Color.FromArgb(195, 208, 230));
+            _dirLabel = MakeLabel("—", Theme.UiSmall, Theme.TextCol);
             _btnPick = new FlatButton("选择文件夹");
             _btnPick.Font = Theme.UiSmall;
             _btnPick.Height = S(24);
@@ -246,8 +259,9 @@ namespace PiClient
             _input.Enter += delegate { UpdatePlaceholder(); };
             _input.Leave += delegate { UpdatePlaceholder(); };
             _input.TextChanged += delegate { UpdateComposerHeight(); SlashPalette(); UpdatePlaceholder(); };
+            _input.HandleCreated += delegate { Native.DarkScrollBar(_input.Handle); };
             _inputWrap.Controls.Add(_input);
-            _placeholder = MakeLabel("给 pi 发消息…  Enter 发送 / Shift+Enter 换行 / Ctrl+V 贴图", Theme.Body, Color.FromArgb(93, 104, 128));
+            _placeholder = MakeLabel("给 pi 发消息…  Enter 发送 / Shift+Enter 换行 / Ctrl+V 贴图", Theme.Body, Theme.Muted2);
             _placeholder.Click += delegate { _input.Focus(); };
             _inputWrap.Controls.Add(_placeholder);
 
@@ -308,7 +322,7 @@ namespace PiClient
             Controls.Add(_toastPanel);
             Controls.Add(_palette);
 
-            _topBar.Controls.AddRange(new Control[] { _titleLabel, _modelCombo, _thinkCombo, _ctxLabel, _btnCompact, _btnExport, _btnRename, _btnRestart, _btnSetup });
+            _topBar.Controls.AddRange(new Control[] { _titleLabel, _modelCombo, _thinkCombo, _ctxLabel, _btnCompact, _btnExport, _btnRename, _btnRestart, _btnSetup, _capMin, _capMax, _capClose });
             _sideBar.Controls.AddRange(new Control[] { _btnNew, _dirCaption, _dirLabel, _btnPick, _btnReveal, _openTitle, _openList, _historyTitle, _historyList, _btnFoot, _footLabel });
             _composer.Controls.AddRange(new Control[] { _inputWrap, _attachLabel, _btnAttachClear });
             _statusBar.Controls.Add(_statusLabel);
@@ -329,7 +343,7 @@ namespace PiClient
 
         private Label MakeLabel(string text, Font font, Color color)
         {
-            Label l = new Label();
+            Label l = new DragLabel();
             l.Text = text;
             l.Font = font;
             l.ForeColor = color;
@@ -359,6 +373,15 @@ namespace PiClient
         {
             base.OnResize(e);
             DoLayout();
+            if (_capMax != null)
+            {
+                CaptionKind k = WindowState == FormWindowState.Maximized ? CaptionKind.Restore : CaptionKind.Maximize;
+                if (_capMax.Kind != k)
+                {
+                    _capMax.Kind = k;
+                    _capMax.Invalidate();
+                }
+            }
         }
 
         private void DoLayout()
@@ -377,9 +400,14 @@ namespace PiClient
             _composer.Bounds = new Rectangle(sideW, h - statusH - composerH, w - sideW, composerH);
             _chat.Bounds = new Rectangle(sideW, topH, w - sideW, h - topH - statusH - composerH);
 
-            // 顶栏
-            int right = w - S(10);
-            int cy = S(10);
+            // 顶栏（最右侧是自绘的最小化/最大化/关闭）
+            int capW = S(46);
+            int capH = topH;
+            int right = w - capW * 3 - S(8);
+            int cy = (topH - S(26)) / 2;
+            _capClose.Bounds = new Rectangle(w - capW, 0, capW, capH);
+            _capMax.Bounds = new Rectangle(w - capW * 2, 0, capW, capH);
+            _capMin.Bounds = new Rectangle(w - capW * 3, 0, capW, capH);
             _btnSetup.Bounds = new Rectangle(right - S(28), cy, S(28), S(26));
             right -= S(30);
             _btnRestart.Bounds = new Rectangle(right - S(28), cy, S(28), S(26));
@@ -474,7 +502,7 @@ namespace PiClient
         private void PaintTopBar(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(Theme.Bg);
+            g.Clear(Theme.Panel);
             using (Pen p = new Pen(Theme.BorderSoft)) g.DrawLine(p, 0, _topBar.Height - 1, _topBar.Width, _topBar.Height - 1);
         }
 
@@ -497,14 +525,14 @@ namespace PiClient
 
         private void PaintStatusBar(object sender, PaintEventArgs e)
         {
-            e.Graphics.Clear(Color.FromArgb(13, 17, 26));
+            e.Graphics.Clear(Theme.StatusBarBg);
             using (Pen p = new Pen(Theme.BorderSoft)) e.Graphics.DrawLine(p, 0, 0, _statusBar.Width, 0);
         }
 
         private void PaintToast(object sender, PaintEventArgs e)
         {
             Theme.DrawRound(e.Graphics, new Rectangle(0, 0, _toastPanel.Width - 1, _toastPanel.Height - 1), 8,
-                Color.FromArgb(26, 34, 51), Color.FromArgb(60, 78, 110));
+                Theme.ToastBg, Theme.ToastBorder);
         }
 
         private void PaintPaletteItem(object sender, DrawItemEventArgs e)
@@ -521,6 +549,7 @@ namespace PiClient
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            Application.AddMessageFilter(this);
             Program.Trace("OnShown");
             _cfg = Config.Load();
             ApplySavedBounds();
@@ -584,6 +613,91 @@ namespace PiClient
                 if (_cfg.WinMax) WindowState = FormWindowState.Maximized;
             }
             catch { }
+        }
+
+        private void ToggleMaximize()
+        {
+            WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+        }
+
+        /* ---------------- 无边框窗口：拖拽 / 缩放 / 滚轮 ---------------- */
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == Native.WM_NCHITTEST)
+            {
+                base.WndProc(ref m);
+                if (m.Result.ToInt32() == Native.HTCLIENT)
+                {
+                    int hit = ChromeHitTest(Native.LParamToPoint(m.LParam));
+                    if (hit != 0) m.Result = (IntPtr)hit;
+                }
+                return;
+            }
+            if (m.Msg == Native.WM_GETMINMAXINFO)
+            {
+                base.WndProc(ref m);
+                Native.ConstrainToWorkArea(Handle, m.LParam);
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        private int ChromeHitTest(Point screenPoint)
+        {
+            Point p = PointToClient(screenPoint);
+            int edge = S(6);
+            bool left = p.X < edge;
+            bool right = p.X >= ClientSize.Width - edge;
+            bool top = p.Y < edge;
+            bool bottom = p.Y >= ClientSize.Height - edge;
+
+            if (WindowState != FormWindowState.Maximized)
+            {
+                if (top && left) return Native.HTTOPLEFT;
+                if (top && right) return Native.HTTOPRIGHT;
+                if (bottom && left) return Native.HTBOTTOMLEFT;
+                if (bottom && right) return Native.HTBOTTOMRIGHT;
+                if (left) return Native.HTLEFT;
+                if (right) return Native.HTRIGHT;
+                if (top) return Native.HTTOP;
+                if (bottom) return Native.HTBOTTOM;
+            }
+
+            // 顶栏（含标题、空白、状态文字）整体当标题栏：可拖动、双击最大化
+            if (_topBar != null && p.Y < _topBar.Bottom && p.X < _topBar.Width)
+                return Native.HTCAPTION;
+            return 0;
+        }
+
+        /// <summary>滚轮转到鼠标下的对话区（WinForms 默认只给焦点控件）</summary>
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != Native.WM_MOUSEWHEEL) return false;
+            try
+            {
+                int delta = (short)((long)m.WParam >> 16);
+                IntPtr h = Native.WindowFromPoint(Cursor.Position);
+                Control ctl = Control.FromChildHandle(h);
+                for (Control c = ctl; c != null; c = c.Parent)
+                {
+                    if (c is TextBoxBase || c is ComboBox) return false;
+                    DarkList dl = c as DarkList;
+                    if (dl != null)
+                    {
+                        dl.ScrollBy(-delta * dl.ItemHeight / 120 * 3);
+                        return true;
+                    }
+                    ChatFlow cf = c as ChatFlow;
+                    if (cf != null)
+                    {
+                        cf.ScrollBy(-delta * S(60) / 120 * 3);
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

@@ -41,10 +41,10 @@ namespace PiClient
         private void BuildUser()
         {
             _bubble = new DarkPanel();
-            _bubble.BackColor = Color.FromArgb(27, 39, 64);
+            _bubble.BackColor = Theme.BubbleBg;
             _bubble.Paint += delegate(object s, PaintEventArgs e)
             {
-                Theme.DrawRound(e.Graphics, new Rectangle(0, 0, _bubble.Width - 1, _bubble.Height - 1), 10, Color.FromArgb(27, 39, 64), Color.FromArgb(43, 61, 94));
+                Theme.DrawRound(e.Graphics, new Rectangle(0, 0, _bubble.Width - 1, _bubble.Height - 1), 10, Theme.BubbleBg, Theme.BubbleBorder);
             };
 
             int y = 10;
@@ -55,14 +55,14 @@ namespace PiClient
                 PictureBox pb = new PictureBox();
                 pb.Image = img;
                 pb.SizeMode = PictureBoxSizeMode.Zoom;
-                pb.BackColor = Color.FromArgb(27, 39, 64);
+                pb.BackColor = Theme.BubbleBg;
                 _images.Add(pb);
                 _bubble.Controls.Add(pb);
             }
 
             _bubbleText = new MdView();
             _bubbleText.Plain = true;
-            _bubbleText.BackColor = Color.FromArgb(27, 39, 64);
+            _bubbleText.BackColor = Theme.BubbleBg;
             _bubbleText.ForeColor = Theme.TextCol;
             _bubbleText.SetText(Model.Text);
             _bubbleText.HeightChanged += delegate { LayoutUser(); };
@@ -318,7 +318,7 @@ namespace PiClient
             {
                 if (_isUser)
                 {
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(58, 68, 92))) g.FillPath(b, p);
+                    using (SolidBrush b = new SolidBrush(Theme.Panel3)) g.FillPath(b, p);
                 }
                 else
                 {
@@ -331,102 +331,4 @@ namespace PiClient
         }
     }
 
-    /// <summary>对话区域（可滚动，贴底自动跟随）</summary>
-    internal class ChatFlow : Panel
-    {
-        private readonly List<MessageView> _items = new List<MessageView>();
-        private bool _layingOut;
-        public event EventHandler Scrolled;
-
-        public ChatFlow()
-        {
-            AutoScroll = true;
-            BackColor = Theme.Bg;
-            SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
-            Padding = new Padding(0);
-        }
-
-        public List<MessageView> Items { get { return _items; } }
-
-        public void ClearAll()
-        {
-            for (int i = 0; i < _items.Count; i++) _items[i].Dispose();
-            _items.Clear();
-            Controls.Clear();
-            AutoScrollMinSize = Size.Empty;
-        }
-
-        public void Add(MessageView v)
-        {
-            // 高度变化不在事件里同步重排（会导致递归/栈溢出），交给 60ms 的刷新循环
-            v.HeightChanged += delegate { PendingLayout = true; };
-            _items.Add(v);
-            Controls.Add(v);
-            Relayout();
-        }
-
-        /// <summary>有子控件通知需要重排</summary>
-        public bool PendingLayout;
-
-        public bool NearBottom
-        {
-            get
-            {
-                int total = AutoScrollMinSize.Height;
-                if (total <= ClientSize.Height) return true;
-                return (-AutoScrollPosition.Y) + ClientSize.Height >= total - 80;
-            }
-        }
-
-        public void ScrollToBottom()
-        {
-            Relayout();
-            AutoScrollPosition = new Point(0, AutoScrollMinSize.Height);
-            Relayout();
-        }
-
-        public void Relayout()
-        {
-            if (_layingOut) return;
-            _layingOut = true;
-            PendingLayout = false;
-            try
-            {
-                SuspendLayout();
-                int pad = 26;
-                int width = Math.Max(200, ClientSize.Width - pad * 2);
-                if (width > 940) width = 940;
-                int left = Math.Max(pad, (ClientSize.Width - width) / 2);
-                int scrollY = AutoScrollPosition.Y;
-                int y = 12;
-                for (int i = 0; i < _items.Count; i++)
-                {
-                    MessageView v = _items[i];
-                    if (v.Width != width) v.Width = width;
-                    v.Left = left;
-                    v.Top = y + scrollY;
-                    y += v.Height + 4;
-                }
-                AutoScrollMinSize = new Size(0, y + 16);
-            }
-            finally
-            {
-                ResumeLayout(true);
-                _layingOut = false;
-            }
-        }
-
-        protected override void OnResize(EventArgs e)
-        {
-            base.OnResize(e);
-            Relayout();
-        }
-
-        protected override void OnScroll(ScrollEventArgs se)
-        {
-            base.OnScroll(se);
-            EventHandler h = Scrolled;
-            if (h != null) h(this, EventArgs.Empty);
-        }
-    }
 }

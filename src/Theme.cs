@@ -5,25 +5,52 @@ using System.Windows.Forms;
 
 namespace PiClient
 {
-    /// <summary>配色与字体</summary>
+    /// <summary>配色与字体（青绿主题）</summary>
     internal static class Theme
     {
-        public static readonly Color Bg = Color.FromArgb(10, 13, 20);
-        public static readonly Color Panel = Color.FromArgb(15, 20, 32);
-        public static readonly Color Panel2 = Color.FromArgb(20, 27, 41);
-        public static readonly Color Panel3 = Color.FromArgb(28, 37, 56);
-        public static readonly Color Border = Color.FromArgb(34, 44, 61);
-        public static readonly Color BorderSoft = Color.FromArgb(26, 34, 49);
-        public static readonly Color TextCol = Color.FromArgb(231, 236, 245);
-        public static readonly Color Muted = Color.FromArgb(140, 152, 175);
-        public static readonly Color Muted2 = Color.FromArgb(102, 114, 140);
-        public static readonly Color Accent = Color.FromArgb(91, 140, 255);
-        public static readonly Color Accent2 = Color.FromArgb(154, 107, 255);
-        public static readonly Color Ok = Color.FromArgb(62, 207, 142);
-        public static readonly Color Err = Color.FromArgb(255, 107, 107);
-        public static readonly Color Warn = Color.FromArgb(246, 193, 119);
-        public static readonly Color CodeBg = Color.FromArgb(12, 17, 27);
-        public static readonly Color CodeText = Color.FromArgb(207, 220, 241);
+        // 底色（由深到浅）
+        public static readonly Color Bg = Color.FromArgb(7, 14, 14);
+        public static readonly Color Panel = Color.FromArgb(11, 22, 21);
+        public static readonly Color Panel2 = Color.FromArgb(16, 31, 29);
+        public static readonly Color Panel3 = Color.FromArgb(22, 44, 41);
+        public static readonly Color Surface = Color.FromArgb(13, 26, 25);
+        public static readonly Color Border = Color.FromArgb(30, 58, 54);
+        public static readonly Color BorderSoft = Color.FromArgb(22, 44, 41);
+
+        // 文字
+        public static readonly Color TextCol = Color.FromArgb(226, 242, 239);
+        public static readonly Color Muted = Color.FromArgb(127, 163, 157);
+        public static readonly Color Muted2 = Color.FromArgb(92, 127, 121);
+
+        // 强调色（青绿）
+        public static readonly Color Accent = Color.FromArgb(45, 212, 191);
+        public static readonly Color Accent2 = Color.FromArgb(52, 211, 153);
+        public static readonly Color AccentDim = Color.FromArgb(20, 138, 126);
+        public static readonly Color Link = Color.FromArgb(94, 234, 212);
+        public static readonly Color OnAccent = Color.FromArgb(4, 26, 24);
+
+        // 语义色
+        public static readonly Color Ok = Color.FromArgb(52, 211, 153);
+        public static readonly Color Err = Color.FromArgb(248, 113, 113);
+        public static readonly Color Warn = Color.FromArgb(251, 191, 116);
+
+        // 代码 / 气泡 / 浮层
+        public static readonly Color CodeBg = Color.FromArgb(8, 17, 16);
+        public static readonly Color CodeHead = Color.FromArgb(13, 26, 25);
+        public static readonly Color CodeText = Color.FromArgb(205, 232, 226);
+        public static readonly Color InlineCodeBg = Color.FromArgb(20, 46, 43);
+        public static readonly Color InlineCodeText = Color.FromArgb(140, 236, 220);
+        public static readonly Color BubbleBg = Color.FromArgb(17, 52, 48);
+        public static readonly Color BubbleBorder = Color.FromArgb(30, 84, 77);
+        public static readonly Color ToastBg = Color.FromArgb(18, 38, 35);
+        public static readonly Color ToastBorder = Color.FromArgb(44, 106, 97);
+        public static readonly Color StatusBarBg = Color.FromArgb(9, 18, 17);
+
+        // 选取高亮 / 滚动条
+        public static readonly Color Selection = Color.FromArgb(70, 45, 212, 191);
+        public static readonly Color ScrollTrack = Color.FromArgb(12, 24, 23);
+        public static readonly Color ScrollThumb = Color.FromArgb(45, 79, 74);
+        public static readonly Color ScrollThumbHot = Color.FromArgb(66, 108, 101);
 
         public static Font Ui;
         public static Font UiBold;
@@ -37,6 +64,7 @@ namespace PiClient
         public static Font H1;
         public static Font H2;
         public static Font H3;
+        public static Font Icon;
 
         public static float Scale = 1f;
 
@@ -71,6 +99,7 @@ namespace PiClient
             H1 = new Font(ui, 13f * k, FontStyle.Bold);
             H2 = new Font(ui, 11.5f * k, FontStyle.Bold);
             H3 = new Font(ui, 10.5f * k, FontStyle.Bold);
+            Icon = new Font("Segoe MDL2 Assets", 8.5f * k);
         }
 
         public static string PickFont(params string[] names)
@@ -92,6 +121,14 @@ namespace PiClient
         public static Color WithAlpha(Color c, int a)
         {
             return Color.FromArgb(a, c);
+        }
+
+        public static Color Mix(Color a, Color b, float t)
+        {
+            return Color.FromArgb(
+                (int)Math.Round(a.R + (b.R - a.R) * t),
+                (int)Math.Round(a.G + (b.G - a.G) * t),
+                (int)Math.Round(a.B + (b.B - a.B) * t));
         }
 
         public static GraphicsPath RoundRect(Rectangle r, int radius)
@@ -133,6 +170,22 @@ namespace PiClient
                 {
                     using (Pen pen = new Pen(border)) g.DrawPath(pen, p);
                 }
+                g.SmoothingMode = old;
+            }
+        }
+
+        /// <summary>青绿渐变填充（用于头像、图标、主按钮）</summary>
+        public static void FillGradient(Graphics g, Rectangle r, int radius)
+        {
+            if (r.Width <= 0 || r.Height <= 0) return;
+            using (GraphicsPath p = RoundRect(r, radius))
+            using (LinearGradientBrush b = new LinearGradientBrush(
+                new Rectangle(r.X, r.Y, Math.Max(1, r.Width), Math.Max(1, r.Height)),
+                Accent, Accent2, 45f))
+            {
+                SmoothingMode old = g.SmoothingMode;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.FillPath(b, p);
                 g.SmoothingMode = old;
             }
         }

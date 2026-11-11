@@ -103,7 +103,7 @@ namespace PiClient
             Color border;
             if (Primary)
             {
-                fill = _hover ? Color.FromArgb(107, 154, 255) : Theme.Accent;
+                fill = _hover ? Theme.Accent2 : Theme.Accent;
                 border = Color.Empty;
             }
             else
@@ -261,69 +261,6 @@ namespace PiClient
         public object Tag;
         public Color Dot = Color.Transparent;
         public bool Bold;
-    }
-
-    internal class DarkList : ListBox
-    {
-        public DarkList()
-        {
-            DrawMode = DrawMode.OwnerDrawFixed;
-            BorderStyle = BorderStyle.None;
-            BackColor = Theme.Panel;
-            ForeColor = Theme.TextCol;
-            Font = Theme.Ui;
-            ItemHeight = 40;
-            IntegralHeight = false;
-            SelectionMode = SelectionMode.One;
-        }
-
-        public void SetEntries(List<ListEntry> entries)
-        {
-            object keep = SelectedItem;
-            BeginUpdate();
-            Items.Clear();
-            for (int i = 0; i < entries.Count; i++) Items.Add(entries[i]);
-            EndUpdate();
-            if (keep != null)
-            {
-                for (int i = 0; i < Items.Count; i++)
-                {
-                    ListEntry a = keep as ListEntry;
-                    ListEntry b = Items[i] as ListEntry;
-                    if (a != null && b != null && ReferenceEquals(a.Tag, b.Tag)) { SelectedIndex = i; break; }
-                }
-            }
-        }
-
-        protected override void OnDrawItem(DrawItemEventArgs e)
-        {
-            if (e.Index < 0) return;
-            ListEntry it = Items[e.Index] as ListEntry;
-            if (it == null) return;
-            bool sel = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            Graphics g = e.Graphics;
-            Rectangle r = e.Bounds;
-            if (sel)
-            {
-                Theme.FillRound(g, new Rectangle(r.X + 2, r.Y + 1, r.Width - 5, r.Height - 3), 7, Theme.Panel3);
-            }
-            int x = r.X + 10;
-            if (it.Dot.A > 0)
-            {
-                using (SolidBrush b = new SolidBrush(it.Dot))
-                {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
-                    g.FillEllipse(b, x, r.Y + 12, 6, 6);
-                    g.SmoothingMode = SmoothingMode.Default;
-                }
-                x += 12;
-            }
-            Font f = it.Bold ? Theme.UiBold : Theme.Ui;
-            TextRenderer.DrawText(g, it.Title, f, new Rectangle(x, r.Y + 4, r.Width - x - 12, 18),
-                Theme.TextCol, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-            TextRenderer.DrawText(g, it.Sub, Theme.UiSmall, new Rectangle(r.X + 10, r.Y + 21, r.Width - 22, 16),
-                Theme.Muted2, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-        }
     }
 
     /* ---------------- Markdown 视图 ---------------- */
@@ -655,7 +592,7 @@ namespace PiClient
                 else if (run.Bold) f = Theme.BodyBold;
                 else if (run.Italic) f = Theme.BodyItalic;
                 if (run.Code) f = Theme.Mono;
-                Color col = run.Href != null ? Color.FromArgb(127, 170, 255) : baseColor;
+                Color col = run.Href != null ? Theme.Link : baseColor;
 
                 List<string> chunks = SplitChunks(run.Text);
                 for (int ci = 0; ci < chunks.Count; ci++)
@@ -767,7 +704,7 @@ namespace PiClient
             {
                 CodeRect cr = _codeRects[ci];
                 Theme.DrawRound(g, new Rectangle(0, cr.Top, Width - 1, cr.Bottom - cr.Top), 7,
-                    Color.FromArgb(12, 17, 27), Color.FromArgb(38, 48, 68));
+                    Theme.CodeBg, Theme.Border);
                 string lbl = string.IsNullOrEmpty(cr.Lang) ? "code" : cr.Lang;
                 TextRenderer.DrawText(g, lbl + "    （点击复制）", Theme.UiSmall, new Rectangle(12, cr.Top + 2, Width - 24, 16),
                     Theme.Muted2, TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
@@ -776,13 +713,13 @@ namespace PiClient
             for (int ti = 0; ti < _tableHeaders.Count; ti++)
             {
                 Rectangle hr = _tableHeaders[ti];
-                using (SolidBrush b = new SolidBrush(Color.FromArgb(20, 27, 41))) g.FillRectangle(b, hr);
+                using (SolidBrush b = new SolidBrush(Theme.Panel2)) g.FillRectangle(b, hr);
                 using (Pen p = new Pen(Theme.Border)) g.DrawLine(p, hr.Left, hr.Bottom - 1, hr.Right, hr.Bottom - 1);
             }
             for (int ti = 0; ti < _tableRows.Count; ti++)
             {
                 Rectangle rr = _tableRows[ti];
-                using (Pen p = new Pen(Color.FromArgb(30, 39, 55))) g.DrawLine(p, rr.Left, rr.Bottom - 1, rr.Right, rr.Bottom - 1);
+                using (Pen p = new Pen(Theme.BorderSoft)) g.DrawLine(p, rr.Left, rr.Bottom - 1, rr.Right, rr.Bottom - 1);
             }
             PaintSelection(g);
 
@@ -796,7 +733,7 @@ namespace PiClient
                 }
                 if (ln.Bar == 4)
                 {
-                    using (Pen p = new Pen(Color.FromArgb(70, 85, 120), 2)) g.DrawLine(p, 4, ln.Y - 1, 4, ln.Y + ln.H + 1);
+                    using (Pen p = new Pen(Theme.Border, 2)) g.DrawLine(p, 4, ln.Y - 1, 4, ln.Y + ln.H + 1);
                 }
                 for (int si = 0; si < ln.Segs.Count; si++)
                 {
@@ -805,15 +742,15 @@ namespace PiClient
                     if (s.Chip)
                     {
                         Rectangle chip = new Rectangle(s.X - 3, ln.Y + 1, s.W + 6, ln.H - 2);
-                        Theme.FillRound(g, chip, 4, Color.FromArgb(28, 38, 56));
-                        TextRenderer.DrawText(g, s.Text, s.Font, new Point(s.X, ln.Y + 1), Color.FromArgb(169, 200, 255),
+                        Theme.FillRound(g, chip, 4, Theme.InlineCodeBg);
+                        TextRenderer.DrawText(g, s.Text, s.Font, new Point(s.X, ln.Y + 1), Theme.InlineCodeText,
                             TextFormatFlags.NoPadding);
                     }
                     else if (s.Href != null)
                     {
                         TextRenderer.DrawText(g, s.Text, s.Font, new Point(s.X, ln.Y), s.Color, TextFormatFlags.NoPadding);
                         int tw = TextMeter.Width(s.Text, s.Font);
-                        using (Pen p = new Pen(Color.FromArgb(90, 127, 170, 255)))
+                        using (Pen p = new Pen(Theme.Link))
                             g.DrawLine(p, s.X, ln.Y + ln.H - 2, s.X + tw, ln.Y + ln.H - 2);
                     }
                     else
@@ -1031,7 +968,7 @@ namespace PiClient
             int l1, c1, l2, c2;
             GetSelRange(out l1, out c1, out l2, out c2);
             if (l1 < 0) return;
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(72, 110, 180, 255)))
+            using (SolidBrush b = new SolidBrush(Theme.Selection))
             {
                 for (int i = l1; i <= l2; i++)
                 {
@@ -1170,7 +1107,7 @@ namespace PiClient
             _lang.Height = 22;
             _lang.ForeColor = Theme.Muted;
             _lang.Font = Theme.MonoSmall;
-            _lang.BackColor = Color.FromArgb(18, 26, 40);
+            _lang.BackColor = Theme.CodeHead;
             _lang.TextAlign = ContentAlignment.MiddleLeft;
             _lang.Padding = new Padding(8, 0, 0, 0);
 
@@ -1178,7 +1115,7 @@ namespace PiClient
             _copy.Font = Theme.UiSmall;
             _copy.Height = 20;
             _copy.Width = 46;
-            _copy.FillColor = Color.FromArgb(18, 26, 40);
+            _copy.FillColor = Theme.CodeHead;
             _copy.HoverColor = Theme.Panel3;
             _copy.TextColor = Theme.Muted;
             _copy.Click += delegate
@@ -1268,7 +1205,7 @@ namespace PiClient
             BackColor = Theme.Bg;
             _body = new MdView();
             _body.Dense = true;
-            _body.BackColor = Color.FromArgb(19, 26, 39);
+            _body.BackColor = Theme.Surface;
             _body.Left = 10;
             _body.HeightChanged += delegate { DoLayout(); };
             Controls.Add(_body);
@@ -1326,13 +1263,13 @@ namespace PiClient
         {
             Graphics g = e.Graphics;
             g.Clear(Theme.Bg);
-            Theme.DrawRound(g, new Rectangle(0, 0, Width - 1, 24), 7, Color.FromArgb(22, 30, 45), _hover ? Color.FromArgb(70, 90, 130) : Color.FromArgb(40, 52, 74));
+            Theme.DrawRound(g, new Rectangle(0, 0, Width - 1, 24), 7, Theme.Surface, _hover ? Theme.Border : Theme.Border);
             TextRenderer.DrawText(g, (_open ? "▾ " : "▸ ") + "思考过程", Theme.UiSmall, new Rectangle(8, 3, Width - 16, 18), Theme.Muted,
                 TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);
             if (_open)
             {
-                Theme.FillRound(g, new Rectangle(0, 26, Width - 1, Height - 27), 6, Color.FromArgb(19, 26, 39));
-                using (Pen p = new Pen(Color.FromArgb(38, 48, 68))) g.DrawRectangle(p, 0, 26, Width - 1, Height - 27);
+                Theme.FillRound(g, new Rectangle(0, 26, Width - 1, Height - 27), 6, Theme.Surface);
+                using (Pen p = new Pen(Theme.Border)) g.DrawRectangle(p, 0, 26, Width - 1, Height - 27);
             }
         }
     }
@@ -1372,10 +1309,11 @@ namespace PiClient
             b.ScrollBars = ScrollBars.Vertical;
             b.BorderStyle = BorderStyle.None;
             b.BackColor = Theme.CodeBg;
-            b.ForeColor = Color.FromArgb(196, 210, 230);
+            b.ForeColor = Theme.CodeText;
             b.Font = Theme.MonoSmall;
             b.TabStop = false;
             b.Visible = false;
+            b.HandleCreated += delegate { Native.DarkScrollBar(b.Handle); };
             return b;
         }
 
@@ -1491,7 +1429,7 @@ namespace PiClient
             if (_open && hasOut)
             {
                 _outBox.Visible = true;
-                _outBox.ForeColor = _error ? Color.FromArgb(255, 180, 180) : Color.FromArgb(196, 210, 230);
+                _outBox.ForeColor = _error ? Color.FromArgb(255, 180, 180) : Theme.CodeText;
                 _outBox.Bounds = new Rectangle(10, y + 4, w - 20, Math.Min(320, 16 + LineCount(_outText) * 15));
                 y = _outBox.Bottom + 8;
             }
@@ -1538,11 +1476,11 @@ namespace PiClient
             Graphics g = e.Graphics;
             g.Clear(Theme.Bg);
             // 卡片背景
-            Theme.DrawRound(g, new Rectangle(0, 0, Width - 1, Height - 1), 8, Color.FromArgb(15, 20, 32),
-                _error ? Color.FromArgb(80, 45, 55) : Color.FromArgb(38, 48, 68));
+            Theme.DrawRound(g, new Rectangle(0, 0, Width - 1, Height - 1), 8, Theme.Panel,
+                _error ? Color.FromArgb(80, 45, 55) : Theme.Border);
             Rectangle head = new Rectangle(0, 0, Width - 1, 29);
-            Theme.FillRound(g, head, 8, _hover ? Color.FromArgb(24, 32, 48) : Color.FromArgb(19, 26, 40));
-            using (Pen p = new Pen(Color.FromArgb(34, 44, 61))) g.DrawLine(p, 1, 29, Width - 2, 29);
+            Theme.FillRound(g, head, 8, _hover ? Theme.Panel3 : Theme.Surface);
+            using (Pen p = new Pen(Theme.Border)) g.DrawLine(p, 1, 29, Width - 2, 29);
 
             string icon = _running ? "●" : (_error ? "✕" : "✓");
             Color ic = _running ? Theme.Warn : (_error ? Theme.Err : Theme.Ok);
@@ -1550,7 +1488,7 @@ namespace PiClient
 
             int nx = 26;
             int nameW = TextMeter.Width(_name, Theme.UiBold) + 6;
-            TextRenderer.DrawText(g, _name, Theme.UiBold, new Rectangle(nx, 7, nameW, 16), Color.FromArgb(157, 180, 255),
+            TextRenderer.DrawText(g, _name, Theme.UiBold, new Rectangle(nx, 7, nameW, 16), Theme.Accent,
                 TextFormatFlags.NoPadding);
 
             int sx = nx + nameW + 6;
