@@ -174,14 +174,27 @@ git push
 7. 可选：发一个 Release（给使用者稳定下载页）。仓库里有两个脚本：
 
 ```bat
-:: GitHub（用 GCM 存在凭据管理器里的 OAuth token，读 GH_TOKEN）
+:: GitHub：令牌取自 Git Credential Manager 存的 OAuth token
+python tools\get-gh-token.cmd            :: 可选，导出到 GH_TOKEN
 set GH_TOKEN=...
 python tools\make-release-github.py
 
-:: Gitee（需要私人令牌：Gitee → 设置 → 私人令牌 → 勾选 projects）
-set GITEE_TOKEN=...
+:: Gitee：令牌存在 Windows 凭据管理器（target = pi-client:gitee），脚本自动读取
 python tools\make-release-gitee.py
+:: 也可以临时覆盖：set GITEE_TOKEN=xxx && python tools\make-release-gitee.py
 ```
+
+   **令牌存放**（不要写进仓库）：
+   - 首次保存：`cmdkey /generic:pi-client:gitee /user:gitee-token /pass:<口令>`
+   - 查看是否已存：`cmdkey /list:pi-client:gitee`
+   - 删除：`cmdkey /delete:pi-client:gitee`
+   - 脚本读取顺序：`GITEE_TOKEN` 环境变量 → `pi-client:gitee` 凭据 → `.gitee-token` 文件（已 gitignore）
+
+   **Gitee API 的坑**（都踩过）：
+   - 路径必须是 `/api/v5/repos/{owner}/{repo}/...`（少 `/repos` 会 404 HTML 页）
+   - 只接受表单参数，JSON 会报 `body is missing`
+   - 表单里的空格要编码成 `%20`（`+` 会被路由成 404）
+   - 命令行直接传中文/长文本容易被编码搞坏 → 用临时文件 `--data-binary @file`
 
    两个脚本都会先删掉同 tag 的旧发行版再重建，并上传 `pi-client-<版本>.zip` 与 `pi-client.exe`。
    发之前先 `git tag v<版本> && git push origin v<版本>`（origin 会同时推到 Gitee 和 GitHub）。
