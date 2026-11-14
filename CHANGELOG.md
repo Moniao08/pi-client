@@ -3,6 +3,26 @@
 本项目遵循「小步迭代 + 每次发布都更新 release/」的节奏，版本号写在
 `src/Program.cs` 的窗口标题（可选）、`README.md` 顶部和本文档里。
 
+## v1.4 — 2026-11-14
+
+**新增：自定义厂商（不在 /login 列表里的服务）**
+
+- 「⚠ 未配置 API」引导窗口新增第 ④ 项 **「厂商不在列表里？（自定义 provider）」**
+  - 自动创建 `~/.pi/agent/models.json`（已存在则直接打开），并用记事本打开可直接编辑
+  - 示例片段自动复制到剪贴板（以**硅基流动 SiliconFlow** 为例：`https://api.siliconflow.cn/v1` +
+    `openai-completions` + `compat.supportsDeveloperRole=false`）
+  - 弹窗里说明 API Key 写到 `auth.json` 的格式：`{ "siliconflow": { "type": "api_key", "key": "sk-..." } }`
+- 配好后重启（或点「重新检测」），自定义厂商的模型会直接出现在模型下拉框里
+
+**说明**
+
+- 硅基流动这类服务不属于 OAuth/订阅登录，`/login` 列表里本来就没有；
+  pi 的统一做法是 `models.json`（模型定义）+ `auth.json`（密钥），客户端只是把入口做了出来
+
+**发布**
+
+- `release/pi-client.exe`（169 KB）、`release/pi-client-1.4.zip`
+
 ## v1.3 — 2026-11-14
 
 **新增：未配置 API 时的引导**

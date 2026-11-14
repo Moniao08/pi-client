@@ -7,10 +7,10 @@
   - Gitee：https://gitee.com/zhang-yj08/pi-client
   - GitHub：https://github.com/Moniao08/pi-client
   - main 分支；两个仓库内容保持一致
-- 当前版本：**v1.3**（2026-11-14，API 引导 + 自动更新）
+- 当前版本：**v1.4**（2026-11-14，自定义厂商 + API 引导 + 自动更新）
 - 本机源码目录：`C:\Users\Administrator\pi-client`
 - 本机安装目录：`%LOCALAPPDATA%\Programs\pi-client`（桌面快捷方式「pi 客户端」指向这里）
-- 运行产物：`release/pi-client.exe`（167 KB）、`release/pi-client-1.3.zip`
+- 运行产物：`release/pi-client.exe`（169 KB）、`release/pi-client-1.4.zip`
 
 ---
 
@@ -267,6 +267,9 @@ pi --session "C:\Users\Administrator\.pi\agent\sessions\--E--homework--\2026-10-
 - RPC 入口：`...\pi-coding-agent\dist\bundle\rpc-entry.js`（用 `node.exe` 直接跑，避开 .cmd 引号问题）
 - 会话文件：`C:\Users\Administrator\.pi\agent\sessions\--E--homework--\*.jsonl`（每行一条 JSON，append-only 树）
 - 本机显示：1920×1080，系统缩放 125%（`AppliedDPI=120`）
+- **自定义厂商**：`~/.pi/agent/models.json` 里 `providers.<id> = {name, baseUrl, api:"openai-completions", compat:{supportsDeveloperRole:false}, models:[{id,...}]}`；
+  密钥放 `~/.pi/agent/auth.json` 的 `<id> = {type:"api_key", key:"sk-..."}`。
+  本机已按此接入了**硅基流动**（65 个模型，baseUrl `https://api.siliconflow.cn/v1`）。
 - **版本号**：`src/Program.cs` 里的 `Program.Version`（如 "1.3"），自动更新用它和远端 release 的 tag 比较
 - 编译器：`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`（**C# 5**：不能用 `?.`、字符串插值、
   表达式体成员、`out var`、模式匹配、元组、局部函数）

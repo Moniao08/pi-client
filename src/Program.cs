@@ -8,7 +8,7 @@ namespace PiClient
     internal static class Program
     {
         /// <summary>客户端版本（自动更新用它和远程 release 比较）</summary>
-        public const string Version = "1.3";
+        public const string Version = "1.4";
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 

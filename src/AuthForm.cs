@@ -29,7 +29,7 @@ namespace PiClient
             BackColor = Theme.Panel;
             ForeColor = Theme.TextCol;
             Font = Theme.Ui;
-            ClientSize = new Size(620, 470);
+            ClientSize = new Size(620, 556);
             try
             {
                 Icon ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -67,6 +67,11 @@ namespace PiClient
             FlatButton dir = MakeButton("③ 打开配置目录", 20, y, 250, false);
             dir.Click += delegate { OpenPiDir(); };
             AddTip("auth.json / settings.json 都在 ~\\.pi\\agent 下，可手动检查或备份。", 20, y + 34);
+            y += 70;
+
+            FlatButton custom = MakeButton("④ 厂商不在列表里？（自定义 provider）", 20, y, 250, false);
+            custom.Click += delegate { AddCustomProvider(); };
+            AddTip("硅基流动、自建网关这类 OpenAI 兼容服务，写进 models.json 就能出现在模型列表里。", 20, y + 34);
             y += 70;
 
             Label det = new Label();
@@ -146,6 +151,49 @@ namespace PiClient
                 "或者直接写进 " + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pi", "agent", "auth.json") + "\r\n" +
                 "（格式与 pi 自己的 /login 生成的一致，建议优先用 /login）";
             MessageBox.Show(this, text, "环境变量方式", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void AddCustomProvider()
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".pi", "agent");
+            string path = Path.Combine(dir, "models.json");
+            string nl = Environment.NewLine;
+            string sample = @"{
+  ""providers"": {
+    ""siliconflow"": {
+      ""name"": ""硅基流动"",
+      ""baseUrl"": ""https://api.siliconflow.cn/v1"",
+      ""api"": ""openai-completions"",
+      ""compat"": { ""supportsDeveloperRole"": false },
+      ""models"": [
+        { ""id"": ""deepseek-ai/DeepSeek-V3"", ""name"": ""DeepSeek V3"", ""contextWindow"": 128000, ""maxTokens"": 16384 }
+      ]
+    }
+  }
+}";
+            try
+            {
+                Directory.CreateDirectory(dir);
+                bool created = false;
+                if (!File.Exists(path))
+                {
+                    File.WriteAllText(path, "{" + nl + "  \"providers\": {}" + nl + "}" + nl, new UTF8Encoding(false));
+                    created = true;
+                }
+                try { Clipboard.SetText(sample); } catch { }
+
+                string msg = (created ? "已创建 " + path : "models.json 已存在，马上给你打开。") + nl + nl
+                    + "示例片段已经复制到剪贴板，粘贴到 \"providers\" 里即可：" + nl + nl + sample + nl + nl
+                    + "保存后重启客户端（或点「重新检测」），新模型就会出现在模型下拉框里。" + nl + nl
+                    + "API Key 写在 " + Path.Combine(dir, "auth.json") + "，格式：" + nl
+                    + "  { \"siliconflow\": { \"type\": \"api_key\", \"key\": \"sk-...\" } }";
+                MessageBox.Show(this, msg, "添加自定义厂商", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Process.Start("notepad.exe", "\"" + path + "\"");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "打开失败：" + ex.Message, "pi 客户端", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void OpenPiDir()
