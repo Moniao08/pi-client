@@ -37,9 +37,12 @@ namespace PiClient
 
     internal class DragLabel : Label
     {
+        /// <summary>true 时鼠标命中测试穿透到主窗口（顶栏标题用），false 时正常响应点击</summary>
+        public bool TransparentToHitTest = true;
+
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_NCHITTEST)
+            if (m.Msg == Native.WM_NCHITTEST && TransparentToHitTest)
             {
                 m.Result = (IntPtr)(-1); // HTTRANSPARENT
                 return;

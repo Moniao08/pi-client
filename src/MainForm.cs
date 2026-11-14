@@ -59,6 +59,11 @@ namespace PiClient
         private FlatButton _btnSetup;
         private FlatButton _btnAttachClear;
         private FlatButton _btnFoot;
+        private FlatButton _chipAuth;
+        private FlatButton _chipUpdate;
+        private Label _verLabel;
+        private Updater.Release _pendingUpdate;
+        private string _lastAuthError;
         private CaptionButton _capMin;
         private CaptionButton _capMax;
         private CaptionButton _capClose;
@@ -77,6 +82,7 @@ namespace PiClient
         private bool _smokeDone;
         private bool _built;
         public bool ForceSetup;
+        public bool AuthDemo;
         public string OpenSessionPath;
         private bool _shotOnly;
 
@@ -171,12 +177,12 @@ namespace PiClient
             _statusBar.Paint += PaintStatusBar;
 
             // 顶栏
-            _titleLabel = MakeLabel("新对话", Theme.UiBold, Theme.TextCol);
+            _titleLabel = MakeLabel("新对话", Theme.UiBold, Theme.TextCol, true);
             _modelCombo = new DarkSelect();
             _modelCombo.SelectionChanged += OnModelChanged;
             _thinkCombo = new DarkSelect();
             _thinkCombo.SelectionChanged += OnThinkChanged;
-            _ctxLabel = MakeLabel("", Theme.UiSmall, Theme.Muted);
+            _ctxLabel = MakeLabel("", Theme.UiSmall, Theme.Muted, true);
 
             _btnCompact = MakeIconButton("⤵", "压缩上下文");
             _btnCompact.Click += delegate { Compact(); };
@@ -188,6 +194,31 @@ namespace PiClient
             _btnRestart.Click += delegate { RestartSession(); };
             _btnSetup = MakeIconButton("⚙", "绑定 / 更换 pi");
             _btnSetup.Click += delegate { SetupPi(false); };
+
+            _chipAuth = new FlatButton("⚠ 未配置 API");
+            _chipAuth.Font = Theme.UiSmall;
+            _chipAuth.Height = S(26);
+            _chipAuth.FillColor = Color.FromArgb(46, 36, 18);
+            _chipAuth.HoverColor = Color.FromArgb(62, 49, 24);
+            _chipAuth.BorderColor = Color.FromArgb(96, 74, 36);
+            _chipAuth.TextColor = Theme.Warn;
+            _chipAuth.Visible = false;
+            _chipAuth.Click += delegate { ShowAuthForm(_lastAuthError); };
+
+            _chipUpdate = new FlatButton("");
+            _chipUpdate.Font = Theme.UiSmall;
+            _chipUpdate.Height = S(20);
+            _chipUpdate.FillColor = Color.FromArgb(18, 48, 44);
+            _chipUpdate.HoverColor = Color.FromArgb(24, 62, 57);
+            _chipUpdate.BorderColor = Theme.Border;
+            _chipUpdate.TextColor = Theme.Accent;
+            _chipUpdate.Visible = false;
+            _chipUpdate.Click += delegate { ShowUpdateForm(); };
+
+            _verLabel = MakeLabel("", Theme.UiSmall, Theme.Muted2);
+            _verLabel.TextAlign = ContentAlignment.MiddleRight;
+            _verLabel.Cursor = Cursors.Hand;
+            _verLabel.Click += delegate { CheckForUpdates(true); };
 
             _capMin = new CaptionButton(CaptionKind.Minimize);
             _capMin.Click += delegate { WindowState = FormWindowState.Minimized; };
@@ -322,10 +353,12 @@ namespace PiClient
             Controls.Add(_toastPanel);
             Controls.Add(_palette);
 
-            _topBar.Controls.AddRange(new Control[] { _titleLabel, _modelCombo, _thinkCombo, _ctxLabel, _btnCompact, _btnExport, _btnRename, _btnRestart, _btnSetup, _capMin, _capMax, _capClose });
+            _topBar.Controls.AddRange(new Control[] { _titleLabel, _modelCombo, _thinkCombo, _ctxLabel, _btnCompact, _btnExport, _btnRename, _btnRestart, _btnSetup, _chipAuth, _capMin, _capMax, _capClose });
             _sideBar.Controls.AddRange(new Control[] { _btnNew, _dirCaption, _dirLabel, _btnPick, _btnReveal, _openTitle, _openList, _historyTitle, _historyList, _btnFoot, _footLabel });
             _composer.Controls.AddRange(new Control[] { _inputWrap, _attachLabel, _btnAttachClear });
             _statusBar.Controls.Add(_statusLabel);
+            _statusBar.Controls.Add(_chipUpdate);
+            _statusBar.Controls.Add(_verLabel);
 
             _uiTimer.Interval = 60;
             _uiTimer.Tick += delegate { Pump(); };
@@ -343,7 +376,13 @@ namespace PiClient
 
         private Label MakeLabel(string text, Font font, Color color)
         {
-            Label l = new DragLabel();
+            return MakeLabel(text, font, color, false);
+        }
+
+        private Label MakeLabel(string text, Font font, Color color, bool dragHole)
+        {
+            DragLabel l = new DragLabel();
+            l.TransparentToHitTest = dragHole;
             l.Text = text;
             l.Font = font;
             l.ForeColor = color;
@@ -468,7 +507,10 @@ namespace PiClient
             _attachLabel.Bounds = new Rectangle(padX + S(2), padY + boxH + S(3), S(260), S(20));
             _btnAttachClear.Bounds = new Rectangle(padX + S(190), padY + boxH + S(2), S(74), S(22));
 
-            _statusLabel.Bounds = new Rectangle(S(14), 0, w - S(28), statusH);
+            _chipAuth.Bounds = _modelCombo.Bounds;
+            _verLabel.Bounds = new Rectangle(w - S(176), 0, S(160), statusH);
+            _chipUpdate.Bounds = new Rectangle(w - S(176) - S(150), S(2), S(150), statusH - S(4));
+            _statusLabel.Bounds = new Rectangle(S(14), 0, Math.Max(S(80), w - S(28) - S(340)), statusH);
 
             if (_toastPanel.Visible) PositionToast();
             if (_palette.Visible) PositionPalette();
@@ -575,6 +617,15 @@ namespace PiClient
             }
             _input.Focus();
             Program.Trace("after open session, smoke=" + (_smokePrompt != null));
+
+            if (Updater.LastApplyFailed())
+            {
+                Updater.ClearFailedFlag();
+                ShowToast("上次自动更新没有成功，可点右下角「检查更新」重试", "warn");
+            }
+            Task.Run(delegate { CheckForUpdates(false); });
+            if (AuthDemo) BeginInvoke((Action)delegate { ShowAuthForm("（演示）未检测到已配置的 API"); });
+
             if (_smokePrompt != null) StartSmoke();
             else if (_shotOnly) StartShot();
         }
@@ -1014,6 +1065,10 @@ namespace PiClient
                     _thinkCombo.SetItems(lv, li);
                 }
 
+                bool noModels = s.Models.Count == 0;
+                _chipAuth.Visible = noModels && !s.Dead;
+                if (_modelCombo.Visible == noModels) _modelCombo.Visible = !noModels;
+
                 if (s.HasStats)
                 {
                     double pct = s.CtxPercent;
@@ -1066,6 +1121,10 @@ namespace PiClient
             }
             _statusLabel.Text = sb.ToString();
             _statusLabel.ForeColor = s.Dead ? Theme.Err : (s.Streaming ? Theme.Warn : Theme.Muted2);
+            _verLabel.Text = "客户端 v" + Program.Version;
+            Updater.Release rel = _pendingUpdate;
+            _chipUpdate.Visible = rel != null;
+            if (rel != null) _chipUpdate.Text = "⬆ 新版本 " + rel.Version;
         }
 
         private static string Fmt(long n)
@@ -1147,7 +1206,15 @@ namespace PiClient
             _dirty = true;
 
             string err = await s.PromptAsync(text, images);
-            if (!string.IsNullOrEmpty(err)) ShowToast("发送失败：" + err, "error");
+            if (!string.IsNullOrEmpty(err))
+            {
+                ShowToast("发送失败：" + err, "error");
+                if (LooksLikeAuthError(err))
+                {
+                    _lastAuthError = err;
+                    _dirty = true;
+                }
+            }
             _dirty = true;
         }
 
@@ -1468,6 +1535,111 @@ namespace PiClient
             object v;
             if (d != null && d.TryGetValue(key, out v)) return v;
             return null;
+        }
+
+        /* ---------------- 更新 / 鉴权引导 ---------------- */
+
+        private static bool LooksLikeAuthError(string msg)
+        {
+            if (string.IsNullOrEmpty(msg)) return false;
+            string m = msg.ToLowerInvariant();
+            string[] keys = new string[] {
+                "401", "403", "unauthorized", "api key", "apikey", "api_key",
+                "auth", "credential", "no model", "not configured", "quota",
+                "未配置", "鉴权", "密钥", "登录", "认证", "余额"
+            };
+            for (int i = 0; i < keys.Length; i++) if (m.IndexOf(keys[i], StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
+
+        private void ShowAuthForm(string detail)
+        {
+            string d = detail;
+            if (string.IsNullOrEmpty(d) && _active != null)
+                d = "get_available_models 返回 0 个模型（未检测到任何已配置的 API / 订阅）。";
+            using (AuthForm f = new AuthForm(_pi, _active != null ? _active.Cwd : "", d))
+            {
+                if (f.ShowDialog(this) == DialogResult.Retry)
+                {
+                    Session s = _active;
+                    if (s != null)
+                    {
+                        ShowToast("正在重新检测…", "info");
+                        Task.Run(async delegate
+                        {
+                            await s.RefreshModelsAsync();
+                            _dirty = true;
+                        });
+                    }
+                }
+            }
+        }
+
+        private void ShowUpdateForm()
+        {
+            Updater.Release rel = _pendingUpdate;
+            if (rel == null)
+            {
+                CheckForUpdates(true);
+                return;
+            }
+            using (UpdateForm f = new UpdateForm(rel))
+            {
+                f.ShowDialog(this);
+            }
+        }
+
+        private void CheckForUpdates(bool manual)
+        {
+            if (manual) ShowToast("正在检查更新…", "info");
+            Task.Run(delegate
+            {
+                Updater.Release rel = null;
+                string err = null;
+                try
+                {
+                    rel = Updater.CheckLatest(manual ? 15000 : 8000);
+                }
+                catch (Exception ex)
+                {
+                    err = ex.Message;
+                }
+
+                if (rel != null && Updater.IsNewer(rel.Version, Program.Version))
+                {
+                    _pendingUpdate = rel;
+                    _dirty = true;
+                    if (manual)
+                    {
+                        BeginInvoke((Action)delegate { ShowUpdateForm(); });
+                    }
+                    else
+                    {
+                        string[] item = new string[3];
+                        item[0] = "发现新版本 " + rel.Version + "（点右下角「新版本」按钮可查看并更新）";
+                        item[1] = "info";
+                        item[2] = "";
+                        _toastQueue.Enqueue(item);
+                    }
+                }
+                else if (manual)
+                {
+                    string[] item = new string[3];
+                    if (rel == null)
+                    {
+                        item[0] = "检查更新失败：" + (err ?? "无法连接 Gitee / GitHub");
+                        item[1] = "error";
+                    }
+                    else
+                    {
+                        item[0] = "已是最新版本 v" + Program.Version;
+                        item[1] = "info";
+                    }
+                    item[2] = "";
+                    _toastQueue.Enqueue(item);
+                }
+                _dirty = true;
+            });
         }
 
         /* ---------------- 提示 ---------------- */

@@ -7,6 +7,8 @@ namespace PiClient
 {
     internal static class Program
     {
+        /// <summary>客户端版本（自动更新用它和远程 release 比较）</summary>
+        public const string Version = "1.3";
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 
@@ -87,6 +89,7 @@ namespace PiClient
                     if (args[i] == "--smoke" && i + 1 < args.Length) form.SetSmokePrompt(args[i + 1]);
                     if (args[i] == "--setup") form.ForceSetup = true;
                     if (args[i] == "--shot") form.SetShotOnly();
+                    if (args[i] == "--auth-demo") form.AuthDemo = true;
                     if (args[i] == "--session" && i + 1 < args.Length) form.OpenSessionPath = args[i + 1];
                 }
                 try

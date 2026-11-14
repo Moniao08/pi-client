@@ -123,23 +123,31 @@ namespace PiClient
             }
             catch (Exception ex) { RaiseToast("读取状态失败：" + ex.Message, "error"); }
 
-            try
-            {
-                Dictionary<string, object> d = await Cmd(Json.NewCmd("get_available_models"), 60000);
-                Models.Clear();
-                List<object> arr = Json.Arr(Value(d, "models"));
-                for (int i = 0; i < arr.Count; i++)
-                {
-                    Dictionary<string, object> m = Json.Obj(arr[i]);
-                    if (m != null) Models.Add(m);
-                }
-            }
-            catch { }
+            await RefreshModelsAsync();
 
             await RefreshLevelsAsync();
             await RefreshCommandsAsync();
             await RefreshMessagesAsync();
             await RefreshStatsAsync();
+            Raise();
+        }
+
+        /// <summary>重新拉取可用模型（登录/配置 API 之后用它刷新）</summary>
+        public async Task RefreshModelsAsync()
+        {
+            try
+            {
+                Dictionary<string, object> d = await Cmd(Json.NewCmd("get_available_models"), 60000);
+                List<object> arr = Json.Arr(Value(d, "models"));
+                List<Dictionary<string, object>> list = new List<Dictionary<string, object>>();
+                for (int i = 0; i < arr.Count; i++)
+                {
+                    Dictionary<string, object> m = Json.Obj(arr[i]);
+                    if (m != null) list.Add(m);
+                }
+                Models = list;
+            }
+            catch { }
             Raise();
         }
 
